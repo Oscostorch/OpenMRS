@@ -1,0 +1,51 @@
+body {
+  background: linear-gradient(135deg, #f4fbff 0%, #eef6ff 50%, #f8f9fa 100%);
+  color: #16324f;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar {
+  box-shadow: 0 4px 14px rgba(15, 65, 109, 0.12);
+}
+
+.card {
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(22, 50, 79, 0.08);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0d6efd 0%, #2563eb 100%);
+  border: none;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #198754 0%, #16a34a 100%);
+  border: none;
+}
+
+.btn-outline-light {
+  border-color: rgba(255,255,255,0.35);
+}
+
+.table thead {
+  background: #eaf4ff;
+  color: #0f4c81;
+}
+
+.form-control, .form-select, .form-textarea {
+  border-radius: 10px;
+  border: 1px solid #cfe2ff;
+}
+
+.alert-info {
+  background: #e8f4ff;
+  border-color: #b9dcff;
+  color: #0b5ea8;
+}
+
+.hero-panel {
+  background: linear-gradient(135deg, #0f4c81 0%, #2563eb 100%);
+  color: white;
+  border-radius: 20px;
+}
