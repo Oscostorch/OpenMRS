@@ -15,11 +15,15 @@ const authRoutes = require('./routes/auth');
 const patientRoutes = require('./routes/patients');
 const encryptionRoutes = require('./routes/encryption');
 const blockchainRoutes = require('./routes/blockchain');
+const auditRoutes = require('./routes/audit');
+const reportsRoutes = require('./routes/reports');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/encryption', encryptionRoutes);
 app.use('/api/blockchain', blockchainRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/reports', reportsRoutes);
 
 app.get('/api/ping', (req, res) => res.json({ status: 'ok' }));
 

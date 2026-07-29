@@ -24,6 +24,25 @@ exports.register = async (req, res) => {
 /**
  * Login user
  */
+/**
+ * List all users
+ */
+exports.getUsers = async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM users', []);
+    const users = (result.rows || []).map(u => ({
+      id: u.id,
+      username: u.username,
+      role_id: u.role_id,
+      created_at: u.created_at
+    }));
+    res.json({ users });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 exports.login = async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -36,7 +55,7 @@ exports.login = async (req, res) => {
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const token = jwt.sign({ userId: user.id, roleId: user.role_id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '8h' });
+    const token = jwt.sign({ userId: user.id, username: user.username, roleId: user.role_id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '8h' });
     res.json({ token });
   } catch (err) {
     console.error(err);
