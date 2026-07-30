@@ -45,6 +45,7 @@ function seedMemoryState() {
   if (memoryInitialized) return;
   memoryInitialized = true;
 
+  // Seed role_permissions
   var rp = [
     { id: 1, role_id: 1, permission_id: 1 }, { id: 2, role_id: 1, permission_id: 2 },
     { id: 3, role_id: 1, permission_id: 3 }, { id: 4, role_id: 1, permission_id: 4 },
@@ -60,12 +61,26 @@ function seedMemoryState() {
   ];
   memoryState.role_permissions = rp;
 
+  // Seed all 6 demo users with proper bcrypt hashes
   if (memoryState.users.length === 0) {
-    memoryState.users.push({
-      id: 1, username: 'admin',
-      password_hash: '$2b$10$3GfP4VY9mVhB5a6Y4F2sD.w1AqQ9M9Yw5mY4q3fT2M3zQf7G5jZ6',
-      role_id: 1, created_at: new Date(),
-    });
+    var demoUsers = [
+      { id: 1, username: 'admin', password: 'admin123', role_id: 1 },
+      { id: 2, username: 'doctor', password: 'doctor123', role_id: 2 },
+      { id: 3, username: 'nurse', password: 'nurse123', role_id: 3 },
+      { id: 4, username: 'pharmacist', password: 'pharma123', role_id: 4 },
+      { id: 5, username: 'data_manager', password: 'dm123', role_id: 5 },
+      { id: 6, username: 'me_officer', password: 'me123', role_id: 6 },
+    ];
+    for (var u = 0; u < demoUsers.length; u++) {
+      var du = demoUsers[u];
+      memoryState.users.push({
+        id: du.id,
+        username: du.username,
+        password_hash: bcrypt.hashSync(du.password, 10),
+        role_id: du.role_id,
+        created_at: new Date(),
+      });
+    }
   }
 }
 
@@ -117,11 +132,9 @@ function handleMemoryQuery(text, params) {
   if (sql.indexOf('SELECT * FROM permissions') === 0) {
     return Promise.resolve(buildRows('permissions', memoryState.permissions.slice()));
   }
-
   if (sql.indexOf('SELECT * FROM role_permissions') === 0) {
     return Promise.resolve(buildRows('role_permissions', memoryState.role_permissions.slice()));
   }
-
   if (sql.indexOf('SELECT p.code FROM permissions p JOIN role_permissions rp') === 0) {
     var roleId = Number(values[0]);
     var perms = [];
@@ -137,7 +150,6 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('permissions', perms));
   }
-
   if (sql.indexOf('SELECT * FROM audit_logs ORDER BY time DESC LIMIT') === 0) {
     var limit = Number(values[0] || 200);
     var rows = memoryState.audit_logs.slice().sort(function(a, b) {
@@ -145,7 +157,6 @@ function handleMemoryQuery(text, params) {
     }).slice(0, limit);
     return Promise.resolve(buildRows('audit_logs', rows));
   }
-
   if (sql.indexOf('INSERT INTO audit_logs') === 0) {
     var entry = {
       id: memoryState.audit_logs.length + 1,
@@ -163,11 +174,9 @@ function handleMemoryQuery(text, params) {
     memoryState.audit_logs.push(entry);
     return Promise.resolve({ rows: [{ id: entry.id }], rowCount: 1 });
   }
-
   if (sql.indexOf('SELECT count(*) FROM blockchain_blocks') === 0) {
     return Promise.resolve(buildRows('blockchain_blocks', [{ count: memoryState.blockchain_blocks.length }]));
   }
-
   if (sql.indexOf('SELECT * FROM blockchain_blocks ORDER BY block_number DESC LIMIT') === 0) {
     var limit = Number(values[0] || 100);
     var rows = memoryState.blockchain_blocks.slice().sort(function(a, b) {
@@ -175,14 +184,12 @@ function handleMemoryQuery(text, params) {
     }).slice(0, limit).map(parseBlock);
     return Promise.resolve(buildRows('blockchain_blocks', rows));
   }
-
   if (sql.indexOf('SELECT * FROM blockchain_blocks ORDER BY block_number ASC') === 0) {
     var rows = memoryState.blockchain_blocks.slice().sort(function(a, b) {
       return a.block_number - b.block_number;
     }).map(parseBlock);
     return Promise.resolve(buildRows('blockchain_blocks', rows));
   }
-
   if (sql.indexOf('SELECT * FROM blockchain_blocks WHERE block_number =') === 0) {
     var blockNumber = Number(values[0]);
     var row = null;
@@ -194,7 +201,6 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('blockchain_blocks', row ? [parseBlock(row)] : []));
   }
-
   if (sql.indexOf('SELECT * FROM patients WHERE patient_id =') === 0) {
     var patientId = String(values[0]);
     var row = null;
@@ -206,7 +212,6 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('patients', row ? [row] : []));
   }
-
   if (sql.indexOf('SELECT id, patient_id FROM patients ORDER BY id DESC LIMIT') === 0) {
     var limit = Number(values[0] || 100);
     var rows = memoryState.patients.slice().sort(function(a, b) {
@@ -216,7 +221,6 @@ function handleMemoryQuery(text, params) {
     });
     return Promise.resolve(buildRows('patients', rows));
   }
-
   if (sql.indexOf('SELECT * FROM patients WHERE id =') === 0) {
     var id = Number(values[0]);
     var row = null;
@@ -228,11 +232,9 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('patients', row ? [row] : []));
   }
-
   if (sql.indexOf('SELECT count(*) FROM patients') === 0) {
     return Promise.resolve(buildRows('patients', [{ count: memoryState.patients.length }]));
   }
-
   if (sql.indexOf('SELECT id, username, password_hash, role_id FROM users WHERE username =') === 0) {
     var username = values[0];
     var row = null;
@@ -244,44 +246,29 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('users', row ? [row] : []));
   }
-
   if (sql.indexOf('SELECT id, username, role_id FROM users') === 0) {
     return Promise.resolve(buildRows('users', memoryState.users.slice().map(function(u) {
       return { id: u.id, username: u.username, role_id: u.role_id, created_at: u.created_at };
     })));
   }
-
   if (sql.indexOf('SELECT * FROM users') === 0) {
     return Promise.resolve(buildRows('users', memoryState.users.slice()));
   }
-
   if (sql.indexOf('INSERT INTO users') === 0) {
     var username = values[0];
     var passwordHash = values[1];
     var roleId = values[2] || 2;
-    var user = {
-      id: memoryState.users.length + 1,
-      username: username,
-      password_hash: passwordHash,
-      role_id: roleId,
-      created_at: new Date()
-    };
+    var user = { id: memoryState.users.length + 1, username: username, password_hash: passwordHash, role_id: roleId, created_at: new Date() };
     memoryState.users.push(user);
     return Promise.resolve({ rows: [{ id: user.id, username: user.username }], rowCount: 1 });
   }
-
   if (sql.indexOf('INSERT INTO patients') === 0) {
     var newPatientId = generatePatientId();
     var pid = values[0] || newPatientId;
-    var patient = {
-      id: memoryState.patients.length + 1,
-      patient_id: pid,
-      created_at: new Date()
-    };
+    var patient = { id: memoryState.patients.length + 1, patient_id: pid, created_at: new Date() };
     memoryState.patients.push(patient);
     return Promise.resolve({ rows: [{ id: patient.id, patient_id: patient.patient_id }], rowCount: 1 });
   }
-
   if (sql.indexOf('SELECT * FROM encrypted_records WHERE patient_id') === 0) {
     var pid = Number(values[0]);
     var rows = [];
@@ -292,63 +279,37 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('encrypted_records', rows));
   }
-
   if (sql.indexOf('INSERT INTO encrypted_records') === 0) {
     var entry = {
       id: memoryState.encrypted_records.length + 1,
-      patient_id: values[0],
-      record_type: values[1],
-      ciphertext: values[2],
-      algorithm: values[3] || 'simulated-he',
-      key_reference: values[4] || null,
-      meta: values[5] || {},
-      created_at: new Date()
+      patient_id: values[0], record_type: values[1], ciphertext: values[2],
+      algorithm: values[3] || 'simulated-he', key_reference: values[4] || null,
+      meta: values[5] || {}, created_at: new Date()
     };
     memoryState.encrypted_records.push(entry);
     return Promise.resolve({ rows: [{ id: entry.id }], rowCount: 1 });
   }
-
   if (sql.indexOf('INSERT INTO blockchain_blocks') === 0) {
     var txs = values[2];
-    if (typeof txs === 'object') {
-      txs = JSON.stringify(txs);
-    }
+    if (typeof txs === 'object') { txs = JSON.stringify(txs); }
     var block = {
       id: memoryState.blockchain_blocks.length + 1,
-      block_number: Number(values[0]),
-      timestamp: values[1],
-      transactions: txs,
-      previous_hash: values[3],
-      current_hash: values[4],
-      nonce: Number(values[5]),
-      signature: values[6] || null
+      block_number: Number(values[0]), timestamp: values[1], transactions: txs,
+      previous_hash: values[3], current_hash: values[4], nonce: Number(values[5]), signature: values[6] || null
     };
     memoryState.blockchain_blocks.push(block);
     return Promise.resolve({ rows: [{ id: block.id }], rowCount: 1 });
   }
-
   if (sql.indexOf('INSERT INTO transactions') === 0) {
-    var tx = {
-      id: memoryState.transactions.length + 1,
-      block_id: values[0],
-      tx_type: values[1],
-      user_id: values[2],
-      patient_id: values[3],
-      payload: values[4],
-      created_at: new Date()
-    };
+    var tx = { id: memoryState.transactions.length + 1, block_id: values[0], tx_type: values[1], user_id: values[2], patient_id: values[3], payload: values[4], created_at: new Date() };
     memoryState.transactions.push(tx);
     return Promise.resolve({ rows: [{ id: tx.id }], rowCount: 1 });
   }
-
   if (sql.indexOf('UPDATE patients SET') === 0) {
     var id = Number(values[values.length - 1]);
     var patient = null;
     for (var i = 0; i < memoryState.patients.length; i++) {
-      if (memoryState.patients[i].id === id) {
-        patient = memoryState.patients[i];
-        break;
-      }
+      if (memoryState.patients[i].id === id) { patient = memoryState.patients[i]; break; }
     }
     if (patient) {
       var setPart = sql.match(/SET\s+(.+)\s+WHERE/i);
@@ -356,31 +317,24 @@ function handleMemoryQuery(text, params) {
         var assignments = setPart[1].split(',').map(function(item) { return item.trim(); });
         for (var a = 0; a < assignments.length; a++) {
           var parts = assignments[a].split(' = ');
-          if (parts.length > 0 && values[a] !== undefined) {
-            patient[parts[0]] = values[a];
-          }
+          if (parts.length > 0 && values[a] !== undefined) { patient[parts[0]] = values[a]; }
         }
       }
     }
     return Promise.resolve({ rows: [], rowCount: 1 });
   }
-
   if (sql.indexOf('DELETE FROM patients') === 0) {
     var id = Number(values[0]);
     var filtered = [];
     for (var i = 0; i < memoryState.patients.length; i++) {
-      if (memoryState.patients[i].id !== id) {
-        filtered.push(memoryState.patients[i]);
-      }
+      if (memoryState.patients[i].id !== id) { filtered.push(memoryState.patients[i]); }
     }
     memoryState.patients = filtered;
     return Promise.resolve({ rows: [], rowCount: 1 });
   }
-
   if (sql.indexOf('SELECT * FROM patients') === 0) {
     return Promise.resolve(buildRows('patients', memoryState.patients.slice()));
   }
-
   return Promise.resolve({ rows: [], rowCount: 0 });
 }
 
@@ -401,16 +355,13 @@ async function ensureDefaultAdminUser() {
   try {
     var roleRes = await pool.query('SELECT id FROM roles WHERE name = $1', ['Administrator']);
     var roleId = roleRes.rows[0] ? roleRes.rows[0].id : 1;
-
     var newRoles = [
-      ['Pharmacist', 'Pharmacist role'],
-      ['Data Manager', 'Data management and reports'],
+      ['Pharmacist', 'Pharmacist role'], ['Data Manager', 'Data management and reports'],
       ['ME Officer', 'Monitoring and evaluation']
     ];
     for (var r = 0; r < newRoles.length; r++) {
       await pool.query('INSERT INTO roles(name, description) VALUES ($1, $2) ON CONFLICT DO NOTHING', newRoles[r]);
     }
-
     var permissionSeeds = [
       ['patient.create', 'Create Patient', 'Create new patient records'],
       ['patient.view', 'View Patient', 'View patient information'],
@@ -426,7 +377,6 @@ async function ensureDefaultAdminUser() {
     for (var i = 0; i < permissionSeeds.length; i++) {
       await pool.query('INSERT INTO permissions(code, name, description) VALUES($1, $2, $3) ON CONFLICT DO NOTHING', permissionSeeds[i]);
     }
-
     var usersToSeed = [
       { username: 'admin', password: 'admin123', roleId: roleId },
       { username: 'doctor', password: 'doctor123', roleId: 2 },
@@ -435,7 +385,6 @@ async function ensureDefaultAdminUser() {
       { username: 'data_manager', password: 'dm123', roleId: 5 },
       { username: 'me_officer', password: 'me123', roleId: 6 }
     ];
-
     for (var j = 0; j < usersToSeed.length; j++) {
       var user = usersToSeed[j];
       var existing = await pool.query('SELECT id FROM users WHERE username = $1', [user.username]);
@@ -443,7 +392,6 @@ async function ensureDefaultAdminUser() {
       var passwordHash = await bcrypt.hash(user.password, 10);
       await pool.query('INSERT INTO users(username, password_hash, role_id) VALUES($1, $2, $3)', [user.username, passwordHash, user.roleId]);
     }
-
     console.log('Seeded demo users: admin/admin123, doctor/doctor123, nurse/nurse123, pharmacist/pharma123, data_manager/dm123, me_officer/me123');
   } catch (error) {
     console.warn('Could not seed demo users:', error.message);
