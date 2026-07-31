@@ -1,23 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const { requirePermission } = require('../../blockchain/accessControl');
-const {
-  getBloodGroupDistribution,
-  getAgeRangeDistribution,
-  getDiseaseStatistics,
-  getPrescriptionStatistics,
-  getSummary
-} = require('../controllers/reportsController');
+const { getSummary, getBloodGroup, getEncryptedPatients, getAllRecords, getRecentEncrypted, getDiagnosisSummary, getDiagnosisReport } = require('../controllers/reportsController');
+const { authenticateToken, requirePermission } = require('../middleware/auth');
 
-// All report routes require authentication + reports.view permission
-router.use(authenticateToken);
-
-router.get('/blood-group', requirePermission('reports.view'), getBloodGroupDistribution);
-router.get('/age-range', requirePermission('reports.view'), getAgeRangeDistribution);
-router.get('/diseases', requirePermission('reports.view'), getDiseaseStatistics);
-router.get('/prescriptions', requirePermission('reports.view'), getPrescriptionStatistics);
-router.get('/summary', requirePermission('reports.view'), getSummary);
+router.get('/summary', authenticateToken, getSummary);
+router.get('/blood-group', authenticateToken, getBloodGroup);
+router.get('/encrypted-patients', authenticateToken, requirePermission('reports.view'), getEncryptedPatients);
+router.get('/all-records', authenticateToken, requirePermission('reports.view'), getAllRecords);
+router.get('/diagnosis-summary', authenticateToken, requirePermission('reports.view'), getDiagnosisSummary);
+router.get('/diagnosis', authenticateToken, requirePermission('reports.view'), getDiagnosisReport);
+router.get('/recent-encrypted', authenticateToken, getRecentEncrypted);
 
 module.exports = router;
-

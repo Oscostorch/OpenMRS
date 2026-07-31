@@ -21,6 +21,22 @@ async function logAudit({ userId, username, roleId, action, patientId, status = 
 }
 
 /**
+ * Record encryption performance metrics into the encryption_metrics table.
+ */
+async function recordEncryptionMetrics({ patientId, encryptedFields, startedAt, completedAt, userId }) {
+  try {
+    const latencyMs = encryptedFields.reduce((sum, f) => sum + (f.timeMs || 0), 0);
+    await db.query(
+      `INSERT INTO encryption_metrics(patient_id, algorithm, encrypted_fields, latency_ms, started_at, completed_at, created_by)
+       VALUES($1, $2, $3, $4, $5, $6, $7)`,
+      [String(patientId || ''), 'simulated-he', encryptedFields.length, latencyMs, startedAt || new Date(), completedAt || new Date(), userId || null]
+    );
+  } catch (err) {
+    console.error('Encryption metrics recording failed:', err.message);
+  }
+}
+
+/**
  * Encrypts all sensitive patient fields.
  */
 async function encryptPatientFields(patientData) {
@@ -48,12 +64,16 @@ async function encryptPatientFields(patientData) {
   for (const [field, value] of Object.entries(sensitiveFields)) {
     if (value !== undefined && value !== null && value !== '') {
       const encResult = await enc.encrypt(String(value));
+      const meta = { timeMs: encResult.timeMs };
+      if (field === 'diagnosis') {
+        meta.diagnosis_label = String(value);
+      }
       encryptedFields.push({
         record_type: field,
         ciphertext: encResult.ciphertext,
         algorithm,
         key_reference: keyRef,
-        meta: { timeMs: encResult.timeMs }
+        meta
       });
     }
   }
@@ -112,6 +132,7 @@ exports.getPatient = async (req, res) => {
         id: patient.id,
         patient_id: patient.patient_id,
         encryptedRecords: encryptedRecords.map(r => ({
+          id: r.id,
           record_type: r.record_type,
           ciphertext: r.ciphertext,
           algorithm: r.algorithm || 'simulated-he',
@@ -138,7 +159,18 @@ exports.createPatient = async (req, res) => {
     );
     const pid = insertResult.rows[0].id;
 
+    const startedAt = new Date().toISOString();
     const encryptedFields = await encryptPatientFields(req.body);
+    const completedAt = new Date().toISOString();
+
+    // Record encryption performance metrics
+    await recordEncryptionMetrics({
+      patientId: pid,
+      encryptedFields: encryptedFields.map(f => ({ timeMs: f.meta.timeMs })),
+      startedAt,
+      completedAt,
+      userId: req.user?.userId
+    });
 
     for (const field of encryptedFields) {
       await db.query(
@@ -199,9 +231,20 @@ exports.updatePatient = async (req, res) => {
 
     const existingResult = await db.query('SELECT * FROM patients WHERE id = $1', [id]);
     const existingPatient = existingResult.rows[0];
-    if (!existingPatient) return res.status(404).json({ error: 'Not found' });
+if (!existingPatient) return res.status(404).json({ error: 'Not found' });
 
+    const startedAt = new Date().toISOString();
     const encryptedFields = await encryptPatientFields(fields);
+    const completedAt = new Date().toISOString();
+
+    // Record encryption performance metrics
+    await recordEncryptionMetrics({
+      patientId: id,
+      encryptedFields: encryptedFields.map(f => ({ timeMs: f.meta.timeMs })),
+      startedAt,
+      completedAt,
+      userId: req.user?.userId
+    });
 
     for (const field of encryptedFields) {
       await db.query(

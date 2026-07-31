@@ -1,11 +1,15 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://openmrs:openmrs@localhost:5432/openmrs_db',
 });
+
+const MEMORY_DB_PATH = path.join(__dirname, '..', 'data', 'memory-db.json');
 
 const memoryState = {
   roles: [
@@ -36,13 +40,107 @@ const memoryState = {
   transactions: [],
   audit_logs: [],
   encryption_keys: [],
+  encryption_metrics: [],
 };
 
 let memoryInitialized = false;
 let patientIdCounter = 0;
 
+function getDefaultMemoryState() {
+  return {
+    roles: [
+      { id: 1, name: 'Administrator', description: 'Full access' },
+      { id: 2, name: 'Doctor', description: 'Doctor role' },
+      { id: 3, name: 'Nurse', description: 'Nurse role' },
+      { id: 4, name: 'Pharmacist', description: 'Pharmacist role' },
+      { id: 5, name: 'Data Manager', description: 'Data management and reports' },
+      { id: 6, name: 'ME Officer', description: 'Monitoring and evaluation' },
+    ],
+    permissions: [
+      { id: 1, code: 'patient.create', name: 'Create Patient' },
+      { id: 2, code: 'patient.view', name: 'View Patient' },
+      { id: 3, code: 'patient.update', name: 'Update Patient' },
+      { id: 4, code: 'patient.delete', name: 'Delete Patient' },
+      { id: 5, code: 'patient.decrypt', name: 'Decrypt Patient Data' },
+      { id: 6, code: 'encryption.manage', name: 'Manage Encryption' },
+      { id: 7, code: 'reports.view', name: 'View Reports' },
+      { id: 8, code: 'audit.view', name: 'View Audit Logs' },
+      { id: 9, code: 'blockchain.view', name: 'View Blockchain' },
+      { id: 10, code: 'users.manage', name: 'Manage Users' },
+    ],
+    role_permissions: [],
+    users: [],
+    patients: [],
+    encrypted_records: [],
+    blockchain_blocks: [],
+    transactions: [],
+    audit_logs: [],
+    encryption_keys: [],
+    encryption_metrics: [],
+  };
+}
+
+function resetMemoryState() {
+  var defaults = getDefaultMemoryState();
+  for (var key in defaults) {
+    if (defaults.hasOwnProperty(key)) {
+      memoryState[key] = defaults[key];
+    }
+  }
+  memoryInitialized = false;
+  patientIdCounter = 0;
+}
+
+function persistMemoryState() {
+  try {
+    fs.mkdirSync(path.dirname(MEMORY_DB_PATH), { recursive: true });
+    fs.writeFileSync(
+      MEMORY_DB_PATH,
+      JSON.stringify({
+        memoryState: memoryState,
+        patientIdCounter: patientIdCounter,
+      }, null, 2)
+    );
+  } catch (error) {
+    console.warn('Could not persist in-memory database store:', error.message);
+  }
+}
+
+function loadMemoryState() {
+  try {
+    if (!fs.existsSync(MEMORY_DB_PATH)) {
+      return false;
+    }
+
+    var raw = fs.readFileSync(MEMORY_DB_PATH, 'utf8');
+    if (!raw) {
+      return false;
+    }
+
+    var parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return false;
+    }
+
+    var source = parsed.memoryState || parsed;
+    var defaults = getDefaultMemoryState();
+    for (var key in defaults) {
+      if (defaults.hasOwnProperty(key)) {
+        memoryState[key] = Array.isArray(source[key]) ? source[key] : defaults[key];
+      }
+    }
+    patientIdCounter = Number(parsed.patientIdCounter || 0);
+    memoryInitialized = true;
+    return true;
+  } catch (error) {
+    console.warn('Could not load persisted in-memory database store:', error.message);
+    return false;
+  }
+}
+
 function seedMemoryState() {
   if (memoryInitialized) return;
+  if (loadMemoryState()) return;
   memoryInitialized = true;
 
   // Seed role_permissions
@@ -82,6 +180,8 @@ function seedMemoryState() {
       });
     }
   }
+
+  persistMemoryState();
 }
 
 function normalizeText(text) {
@@ -172,6 +272,7 @@ function handleMemoryQuery(text, params) {
       new_hash: values[9] || null,
     };
     memoryState.audit_logs.push(entry);
+    persistMemoryState();
     return Promise.resolve({ rows: [{ id: entry.id }], rowCount: 1 });
   }
   if (sql.indexOf('SELECT count(*) FROM blockchain_blocks') === 0) {
@@ -221,6 +322,15 @@ function handleMemoryQuery(text, params) {
     });
     return Promise.resolve(buildRows('patients', rows));
   }
+  if (sql.indexOf('SELECT id, patient_id, created_at FROM patients ORDER BY id DESC LIMIT') === 0) {
+    var limit = Number(values[0] || 100);
+    var rows = memoryState.patients.slice().sort(function(a, b) {
+      return b.id - a.id;
+    }).slice(0, limit).map(function(p) {
+      return { id: p.id, patient_id: p.patient_id, created_at: p.created_at };
+    });
+    return Promise.resolve(buildRows('patients', rows));
+  }
   if (sql.indexOf('SELECT * FROM patients WHERE id =') === 0) {
     var id = Number(values[0]);
     var row = null;
@@ -246,6 +356,17 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('users', row ? [row] : []));
   }
+if (sql.indexOf('SELECT id, username, role_id FROM users WHERE id =') === 0) {
+    var id = Number(values[0]);
+    var row = null;
+    for (var i = 0; i < memoryState.users.length; i++) {
+      if (memoryState.users[i].id === id) {
+        row = memoryState.users[i];
+        break;
+      }
+    }
+    return Promise.resolve(buildRows('users', row ? [{ id: row.id, username: row.username, role_id: row.role_id, created_at: row.created_at }] : []));
+  }
   if (sql.indexOf('SELECT id, username, role_id FROM users') === 0) {
     return Promise.resolve(buildRows('users', memoryState.users.slice().map(function(u) {
       return { id: u.id, username: u.username, role_id: u.role_id, created_at: u.created_at };
@@ -260,6 +381,7 @@ function handleMemoryQuery(text, params) {
     var roleId = values[2] || 2;
     var user = { id: memoryState.users.length + 1, username: username, password_hash: passwordHash, role_id: roleId, created_at: new Date() };
     memoryState.users.push(user);
+    persistMemoryState();
     return Promise.resolve({ rows: [{ id: user.id, username: user.username }], rowCount: 1 });
   }
   if (sql.indexOf('INSERT INTO patients') === 0) {
@@ -267,6 +389,8 @@ function handleMemoryQuery(text, params) {
     var pid = values[0] || newPatientId;
     var patient = { id: memoryState.patients.length + 1, patient_id: pid, created_at: new Date() };
     memoryState.patients.push(patient);
+    patientIdCounter = Math.max(patientIdCounter, patient.id);
+    persistMemoryState();
     return Promise.resolve({ rows: [{ id: patient.id, patient_id: patient.patient_id }], rowCount: 1 });
   }
   if (sql.indexOf('SELECT * FROM encrypted_records WHERE patient_id') === 0) {
@@ -279,6 +403,13 @@ function handleMemoryQuery(text, params) {
     }
     return Promise.resolve(buildRows('encrypted_records', rows));
   }
+  if (sql.indexOf('SELECT * FROM encrypted_records ORDER BY id DESC LIMIT') === 0) {
+    var limit = Number(values[0] || 10);
+    var rows = memoryState.encrypted_records.slice().sort(function(a, b) {
+      return b.id - a.id;
+    }).slice(0, limit);
+    return Promise.resolve(buildRows('encrypted_records', rows));
+  }
   if (sql.indexOf('INSERT INTO encrypted_records') === 0) {
     var entry = {
       id: memoryState.encrypted_records.length + 1,
@@ -287,7 +418,34 @@ function handleMemoryQuery(text, params) {
       meta: values[5] || {}, created_at: new Date()
     };
     memoryState.encrypted_records.push(entry);
+    persistMemoryState();
     return Promise.resolve({ rows: [{ id: entry.id }], rowCount: 1 });
+  }
+  if (sql.indexOf('SELECT er.id AS record_id, p.patient_id, er.record_type, er.ciphertext, er.algorithm, er.created_at FROM encrypted_records er JOIN patients p ON p.id = er.patient_id ORDER BY er.id DESC LIMIT') === 0) {
+    var limit = Number(values[0] || 200);
+    var joined = [];
+    for (var i = memoryState.encrypted_records.length - 1; i >= 0; i--) {
+      var rec = memoryState.encrypted_records[i];
+      var patient = null;
+      for (var j = 0; j < memoryState.patients.length; j++) {
+        if (memoryState.patients[j].id === rec.patient_id) {
+          patient = memoryState.patients[j];
+          break;
+        }
+      }
+      if (patient) {
+        joined.push({
+          record_id: rec.id,
+          patient_id: patient.patient_id,
+          record_type: rec.record_type,
+          ciphertext: rec.ciphertext,
+          algorithm: rec.algorithm,
+          created_at: rec.created_at
+        });
+      }
+      if (joined.length >= limit) break;
+    }
+    return Promise.resolve(buildRows('encrypted_records', joined));
   }
   if (sql.indexOf('INSERT INTO blockchain_blocks') === 0) {
     var txs = values[2];
@@ -298,11 +456,13 @@ function handleMemoryQuery(text, params) {
       previous_hash: values[3], current_hash: values[4], nonce: Number(values[5]), signature: values[6] || null
     };
     memoryState.blockchain_blocks.push(block);
+    persistMemoryState();
     return Promise.resolve({ rows: [{ id: block.id }], rowCount: 1 });
   }
   if (sql.indexOf('INSERT INTO transactions') === 0) {
     var tx = { id: memoryState.transactions.length + 1, block_id: values[0], tx_type: values[1], user_id: values[2], patient_id: values[3], payload: values[4], created_at: new Date() };
     memoryState.transactions.push(tx);
+    persistMemoryState();
     return Promise.resolve({ rows: [{ id: tx.id }], rowCount: 1 });
   }
   if (sql.indexOf('UPDATE patients SET') === 0) {
@@ -321,6 +481,7 @@ function handleMemoryQuery(text, params) {
         }
       }
     }
+    persistMemoryState();
     return Promise.resolve({ rows: [], rowCount: 1 });
   }
   if (sql.indexOf('DELETE FROM patients') === 0) {
@@ -330,10 +491,29 @@ function handleMemoryQuery(text, params) {
       if (memoryState.patients[i].id !== id) { filtered.push(memoryState.patients[i]); }
     }
     memoryState.patients = filtered;
+    persistMemoryState();
     return Promise.resolve({ rows: [], rowCount: 1 });
   }
   if (sql.indexOf('SELECT * FROM patients') === 0) {
     return Promise.resolve(buildRows('patients', memoryState.patients.slice()));
+  }
+  if (sql.indexOf('SELECT * FROM encryption_metrics') === 0) {
+    return Promise.resolve(buildRows('encryption_metrics', memoryState.encryption_metrics.slice()));
+  }
+  if (sql.indexOf('INSERT INTO encryption_metrics') === 0) {
+    var entry = {
+      id: memoryState.encryption_metrics.length + 1,
+      patient_id: values[0] || null,
+      algorithm: values[1] || 'simulated-he',
+      encrypted_fields: Number(values[2]) || 0,
+      latency_ms: Number(values[3]) || 0,
+      started_at: values[4] || new Date(),
+      completed_at: values[5] || new Date(),
+      created_by: values[6] || null
+    };
+    memoryState.encryption_metrics.push(entry);
+    persistMemoryState();
+    return Promise.resolve({ rows: [{ id: entry.id }], rowCount: 1 });
   }
   return Promise.resolve({ rows: [], rowCount: 0 });
 }
@@ -404,19 +584,21 @@ module.exports = {
   computeHash: computeHash,
   generatePatientId: generatePatientId,
   initDb: async function() {
-    if (process.env.FORCE_MEMORY_DB === 'true') {
-      console.log('Forcing in-memory database mode');
-      seedMemoryState();
-      return { mode: 'memory' };
-    }
-    try {
-      await pool.query('SELECT NOW()');
-      await ensureDefaultAdminUser();
+  if (process.env.FORCE_MEMORY_DB === 'true') {
+    console.log('Forcing in-memory database mode');
+    seedMemoryState();
+    persistMemoryState();
+    return { mode: 'memory' };
+  }
+  try {
+    await pool.query('SELECT NOW()');
+    await ensureDefaultAdminUser();
       return { mode: 'postgres' };
-    } catch (error) {
-      console.warn('PostgreSQL not available; using in-memory database store.');
-      seedMemoryState();
-      return { mode: 'memory' };
-    }
+  } catch (error) {
+    console.warn('PostgreSQL not available; using in-memory database store.');
+    seedMemoryState();
+    persistMemoryState();
+    return { mode: 'memory' };
+  }
   }
 };

@@ -11,6 +11,14 @@ export default function Login(){
     try{
       const res = await axios.post('/api/auth/login', { username, password });
       localStorage.setItem('token', res.data.token);
+      // Store user info
+      try {
+        const { jwtDecode } = await import('jwt-decode');
+        const decoded = jwtDecode(res.data.token);
+        localStorage.setItem('user', JSON.stringify({ userId: decoded.userId, roleId: decoded.roleId, username: decoded.username || decoded.userId }));
+      } catch (e) {
+        localStorage.setItem('user', JSON.stringify({ username }));
+      }
       window.location.href = '/';
     }catch(err){
       setError(err?.response?.data?.error || 'Login failed');

@@ -319,3 +319,174 @@ test('reports do not expose PII', async () => {
     await once(server, 'close');
   }
 });
+
+// ===================================
+// Encryption Performance Tests
+// ===================================
+
+test('encryption performance endpoint returns metrics', async () => {
+  var server = await startServer();
+  var address = server.address();
+  var baseUrl = 'http://127.0.0.1:' + address.port;
+  var username = 'perf_test_' + Date.now();
+
+  try {
+    var token = await registerAndLogin(baseUrl, username, 'perfpass', 1);
+    assert.ok(token);
+
+    // Perform an encryption to generate metrics
+    var encRes = await fetch(baseUrl + '/api/encryption/encrypt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ plaintext: 'test data for performance' })
+    });
+    assert.equal(encRes.status, 200);
+    var encData = await encRes.json();
+    assert.ok(encData.ciphertext);
+    assert.ok(encData.timeMs !== undefined);
+
+    // Get performance metrics
+    var perfRes = await fetch(baseUrl + '/api/encryption/performance', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    assert.equal(perfRes.status, 200);
+    var perfData = await perfRes.json();
+    assert.ok(perfData.total_operations !== undefined);
+    assert.ok(perfData.avg_latency_ms !== undefined);
+    assert.ok(perfData.min_latency_ms !== undefined);
+    assert.ok(perfData.max_latency_ms !== undefined);
+    assert.ok(perfData.total_operations >= 1);
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
+
+// ===================================
+// Admin-Only User Management Tests
+// ===================================
+
+test('non-admin cannot access user management', async () => {
+  var server = await startServer();
+  var address = server.address();
+  var baseUrl = 'http://127.0.0.1:' + address.port;
+  var username = 'nonadmin_test_' + Date.now();
+
+  try {
+    var nonAdminToken = await registerAndLogin(baseUrl, username, 'test123', 2);
+    assert.ok(nonAdminToken);
+
+    // Try to list users (should be forbidden for non-admin)
+    var usersRes = await fetch(baseUrl + '/api/auth/users', {
+      headers: { 'Authorization': 'Bearer ' + nonAdminToken }
+    });
+    assert.ok(usersRes.status === 403, 'Non-admin should get 403 for user management');
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
+
+test('admin can access user management', async () => {
+  var server = await startServer();
+  var address = server.address();
+  var baseUrl = 'http://127.0.0.1:' + address.port;
+  var username = 'admin_test_' + Date.now();
+
+  try {
+    var adminToken = await registerAndLogin(baseUrl, username, 'adminpass', 1);
+    assert.ok(adminToken);
+
+    // List users (admin should have access)
+    var usersRes = await fetch(baseUrl + '/api/auth/users', {
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    assert.equal(usersRes.status, 200);
+    var usersData = await usersRes.json();
+    assert.ok(Array.isArray(usersData.users));
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
+
+// ===================================
+// Profile Endpoint Tests
+// ===================================
+
+test('profile endpoint returns user info and role', async () => {
+  var server = await startServer();
+  var address = server.address();
+  var baseUrl = 'http://127.0.0.1:' + address.port;
+  var username = 'profile_test_' + Date.now();
+
+  try {
+    var token = await registerAndLogin(baseUrl, username, 'profilepass', 1);
+    assert.ok(token);
+
+    var profileRes = await fetch(baseUrl + '/api/auth/profile', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    assert.equal(profileRes.status, 200);
+    var profileData = await profileRes.json();
+    assert.ok(profileData.user);
+    assert.equal(profileData.user.username, username);
+    assert.ok(profileData.user.role_id !== undefined);
+    assert.ok(profileData.role_name !== undefined);
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
+
+// ===================================
+// Encrypted Reports Tests
+// ===================================
+
+test('encrypted patients report endpoint works', async () => {
+  var server = await startServer();
+  var address = server.address();
+  var baseUrl = 'http://127.0.0.1:' + address.port;
+  var username = 'encrpt_test_' + Date.now();
+
+  try {
+    var token = await registerAndLogin(baseUrl, username, 'encrpt', 1);
+    assert.ok(token);
+
+    var reportRes = await fetch(baseUrl + '/api/reports/encrypted-patients', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    assert.equal(reportRes.status, 200);
+    var reportData = await reportRes.json();
+    assert.ok(Array.isArray(reportData.patients));
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
+
+// ===================================
+// Dashboard Recent Encrypted Tests
+// ===================================
+
+test('dashboard recent encrypted endpoint returns data', async () => {
+  var server = await startServer();
+  var address = server.address();
+  var baseUrl = 'http://127.0.0.1:' + address.port;
+  var username = 'dash_test_' + Date.now();
+
+  try {
+    var token = await registerAndLogin(baseUrl, username, 'dashpass', 1);
+    assert.ok(token);
+
+    var dashRes = await fetch(baseUrl + '/api/dashboard/recent-encrypted', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    assert.equal(dashRes.status, 200);
+    var dashData = await dashRes.json();
+    assert.ok(Array.isArray(dashData.records));
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});

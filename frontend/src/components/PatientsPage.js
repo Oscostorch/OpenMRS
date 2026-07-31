@@ -207,7 +207,19 @@ export default function PatientsPage() {
                     <input className="form-control mb-2" name="allergies" placeholder="Allergies" value={form.allergies} onChange={handleChange} />
                   </div>
                   <div className="col-md-6">
-                    <textarea className="form-control mb-2" name="diagnosis" placeholder="Diagnosis" rows={2} value={form.diagnosis} onChange={handleChange} />
+                    <select className="form-select mb-2" name="diagnosis" value={form.diagnosis} onChange={handleChange}>
+                      <option value="">Select Diagnosis</option>
+                      <option>Malaria</option>
+                      <option>Typhoid Fever</option>
+                      <option>Diabetes</option>
+                      <option>Hypertension</option>
+                      <option>Pneumonia</option>
+                      <option>Tuberculosis</option>
+                      <option>Asthma</option>
+                      <option>Cholera</option>
+                      <option>HIV/AIDS</option>
+                      <option>Peptic Ulcer</option>
+                    </select>
                     <textarea className="form-control mb-2" name="prescription" placeholder="Prescription" rows={2} value={form.prescription} onChange={handleChange} />
                     <textarea className="form-control mb-2" name="doctor_notes" placeholder="Doctor Notes" rows={2} value={form.doctor_notes} onChange={handleChange} />
                     <textarea className="form-control mb-2" name="lab_results" placeholder="Lab Results" rows={2} value={form.lab_results} onChange={handleChange} />

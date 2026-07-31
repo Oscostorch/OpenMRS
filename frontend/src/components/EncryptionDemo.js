@@ -9,6 +9,11 @@ export default function EncryptionDemo() {
   const [avgResult, setAvgResult] = useState(null);
   const [encryptTime, setEncryptTime] = useState(null);
 
+  const formatMs = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num.toFixed(3) : '0.000';
+  };
+
   const doEncrypt = async () => {
     if (!plaintext) return;
     const res = await api.post('/api/encryption/encrypt', { plaintext });
@@ -54,7 +59,7 @@ export default function EncryptionDemo() {
             <div className="col-md-6">
               <label className="form-label">Result (Ciphertext)</label>
               <textarea className="form-control mb-2" value={ciphertext} readOnly rows={3} placeholder="Encrypted output will appear here..." />
-              {encryptTime !== null && <small className="text-muted">Encryption time: {encryptTime}ms</small>}
+              {encryptTime !== null && <small className="text-muted">Encryption time: {formatMs(encryptTime)}ms</small>}
             </div>
           </div>
         </div>
@@ -101,7 +106,7 @@ export default function EncryptionDemo() {
                   <p className="mb-1"><strong>Average (encrypted):</strong></p>
                   <code style={{ wordBreak: 'break-all', fontSize: '0.75rem' }}>{avgResult.ciphertext}</code>
                   <p className="mt-2 mb-0 small text-muted">
-                    Count: {avgResult.count} | Time: {avgResult.timeMs}ms
+                    Count: {avgResult.count} | Time: {formatMs(avgResult.timeMs)}ms
                   </p>
                 </div>
               ) : (

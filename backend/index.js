@@ -24,6 +24,7 @@ app.use('/api/encryption', encryptionRoutes);
 app.use('/api/blockchain', blockchainRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/dashboard', reportsRoutes);
 
 app.get('/api/ping', (req, res) => res.json({ status: 'ok' }));
 

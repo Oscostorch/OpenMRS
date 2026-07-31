@@ -98,6 +98,17 @@ CREATE TABLE role_permissions (
   UNIQUE(role_id, permission_id)
 );
 
+CREATE TABLE encryption_metrics (
+  id SERIAL PRIMARY KEY,
+  patient_id VARCHAR(64),
+  algorithm VARCHAR(100) DEFAULT 'simulated-he',
+  encrypted_fields INTEGER DEFAULT 0,
+  latency_ms DOUBLE PRECISION DEFAULT 0,
+  started_at TIMESTAMP DEFAULT now(),
+  completed_at TIMESTAMP DEFAULT now(),
+  created_by INTEGER REFERENCES users(id)
+);
+
 -- seed minimal roles
 INSERT INTO roles(name, description) VALUES ('Administrator', 'Full access'), ('Doctor','Doctor role'), ('Nurse','Nurse role'), ('Pharmacist', 'Pharmacist role'), ('Data Manager', 'Data management and reports'), ('ME Officer', 'Monitoring and evaluation');
 

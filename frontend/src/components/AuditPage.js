@@ -110,8 +110,8 @@ export default function AuditPage() {
                       </span>
                     </td>
                     <td>{log.patient_id ? `#${log.patient_id}` : '-'}</td>
-                    <td>
-                      <span className={`badge ${log.status === 'SUCCESS' ? 'bg-success' : log.status === 'DENIED' ? 'bg-danger' : 'bg-secondary'}`}>
+<td>
+                      <span className={`badge ${log.status === 'SUCCESS' ? 'bg-success' : log.status === 'FAILED' || log.status === 'DENIED' ? 'bg-danger' : 'bg-secondary'}`}>
                         {log.status || 'N/A'}
                       </span>
                     </td>
@@ -134,7 +134,7 @@ export default function AuditPage() {
                   <strong>{action.action}</strong> by <em>{action.username || 'unknown'}</em>
                   <br /><small className="text-muted">{action.time ? new Date(action.time).toLocaleString() : ''}</small>
                 </div>
-                <span className={`badge ${action.status === 'SUCCESS' ? 'bg-success' : 'bg-secondary'}`}>
+<span className={`badge ${action.status === 'SUCCESS' ? 'bg-success' : action.status === 'FAILED' || action.status === 'DENIED' ? 'bg-danger' : 'bg-secondary'}`}>
                   {action.status || 'N/A'}
                 </span>
               </li>
